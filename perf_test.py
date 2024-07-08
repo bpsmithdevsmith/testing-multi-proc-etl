@@ -8,6 +8,8 @@ import timeit
 import psycopg2
 from psycopg2.extras import execute_batch
 from dotenv import load_dotenv, find_dotenv
+import boto3
+from botocore.exceptions import ClientError
 
 
 load_dotenv(find_dotenv())
@@ -23,6 +25,37 @@ CREATE_TABLE_SQL = """
 DROP_TABLE_SQL = "DROP TABLE IF EXISTS {table}"
 
 INSERT_SQL = "INSERT INTO {table} (fake_id, json_data) VALUES (%s, %s);"
+
+
+def get_credentials():
+    secret_name = "rds!cluster-59c83da8-c841-4e45-aa32-98d302cd8daa"
+    region_name = "us-east-2"
+
+    # Create a Secrets Manager client
+    session = boto3.session.Session()
+    client = session.client(
+        service_name='secretsmanager',
+        region_name=region_name
+    )
+
+    try:
+        get_secret_value_response = client.get_secret_value(
+            SecretId=secret_name
+        )
+    except ClientError as e:
+        # For a list of exceptions thrown, see
+        # https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html
+        raise e
+
+    secret = get_secret_value_response['SecretString']
+    secret = json.loads(secret)
+
+    os.environ["PGUSER"] = secret["username"]
+    os.environ["PGPASS"] = secret["password"]
+    return secret
+
+
+credentials = get_credentials()
 
 
 class DBManager:
@@ -164,6 +197,14 @@ def test_multithread(table, nworkers, nrows, batch_size, json_kbs, method):
 
     t1 = timeit.default_timer()
     print(f"inserts {t1-t0} seconds")
+
+
+@cli.command()
+def test_credentials():
+    secret = get_credentials()
+    print(secret)
+
+
 
 
 
