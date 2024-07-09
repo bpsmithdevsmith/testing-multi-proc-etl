@@ -1,9 +1,10 @@
 #!/bin/bash
 
-set -o errexit
-set -o nounset
-set -o pipefail
-set -o xtrace
+# Enable strict error handling
+set -euo pipefail
+
+# Enable trace mode for debugging
+set -x
 
 python perf_test.py drop-table --table threads
 python perf_test.py create-table --table threads

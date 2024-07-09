@@ -28,8 +28,8 @@ INSERT_SQL = "INSERT INTO {table} (fake_id, json_data) VALUES (%s, %s);"
 
 
 def get_credentials():
-    secret_name = "rds!cluster-59c83da8-c841-4e45-aa32-98d302cd8daa"
-    region_name = "us-east-2"
+    secret_name = os.environ["AWS_SECRET_NAME"]
+    region_name = os.environ["AWS_REGION"]
 
     # Create a Secrets Manager client
     session = boto3.session.Session()
@@ -50,8 +50,9 @@ def get_credentials():
     return secret
 
 
-credentials = get_credentials()
-print("got credentials")
+if os.environ.get("ENV") != "LOCAL":
+    credentials = get_credentials()
+    print("got credentials")
 
 
 class DBManager:
@@ -72,7 +73,7 @@ class DBManager:
             self.conn.close()
 
 
-def _do_insert_batch(table, nparams, json_kbs):
+def _do_insert_batch(table: str, nparams: int, json_kbs: int):
     # This function is called by each process so it needs to establish its own connection.
     # This is not very efficient, but it is the simplest way to parallelize the inserts.
     # In a real-world scenario, you would re-use the connection, but this would require more complex code.
@@ -85,7 +86,7 @@ def _do_insert_batch(table, nparams, json_kbs):
         cur.close()
 
 
-def _do_insert_copy_from(table, nparams, json_kbs):
+def _do_insert_copy_from(table: str, nparams: int, json_kbs: int):
     # This function is called by each process so it needs to establish its own connection.
     # This is not very efficient, but it is the simplest way to parallelize the inserts.
     # In a real-world scenario, you would re-use the connection, but this would require more complex code.
