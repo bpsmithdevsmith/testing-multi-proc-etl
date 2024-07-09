@@ -1,16 +1,16 @@
-import click
-import csv
-from io import StringIO
 import concurrent.futures
-import os
+import csv
 import json
+import os
 import timeit
-import psycopg2
-from psycopg2.extras import execute_batch
-from dotenv import load_dotenv, find_dotenv
-import boto3
-from botocore.exceptions import ClientError
+from io import StringIO
 
+import boto3
+import click
+import psycopg2
+from botocore.exceptions import ClientError
+from dotenv import find_dotenv, load_dotenv
+from psycopg2.extras import execute_batch
 
 load_dotenv(find_dotenv())
 
@@ -33,21 +33,16 @@ def get_credentials():
 
     # Create a Secrets Manager client
     session = boto3.session.Session()
-    client = session.client(
-        service_name='secretsmanager',
-        region_name=region_name
-    )
+    client = session.client(service_name="secretsmanager", region_name=region_name)
 
     try:
-        get_secret_value_response = client.get_secret_value(
-            SecretId=secret_name
-        )
+        get_secret_value_response = client.get_secret_value(SecretId=secret_name)
     except ClientError as e:
         # For a list of exceptions thrown, see
         # https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html
         raise e
 
-    secret = get_secret_value_response['SecretString']
+    secret = get_secret_value_response["SecretString"]
     secret = json.loads(secret)
 
     os.environ["PGUSER"] = secret["username"]
@@ -56,6 +51,7 @@ def get_credentials():
 
 
 credentials = get_credentials()
+print("got credentials")
 
 
 class DBManager:
@@ -77,7 +73,7 @@ class DBManager:
 
 
 def _do_insert_batch(table, nparams, json_kbs):
-    # This function is called by each process so it needs to establish its own connection. 
+    # This function is called by each process so it needs to establish its own connection.
     # This is not very efficient, but it is the simplest way to parallelize the inserts.
     # In a real-world scenario, you would re-use the connection, but this would require more complex code.
     myjson = {"data": "x" * json_kbs * 1024}
@@ -90,7 +86,7 @@ def _do_insert_batch(table, nparams, json_kbs):
 
 
 def _do_insert_copy_from(table, nparams, json_kbs):
-    # This function is called by each process so it needs to establish its own connection. 
+    # This function is called by each process so it needs to establish its own connection.
     # This is not very efficient, but it is the simplest way to parallelize the inserts.
     # In a real-world scenario, you would re-use the connection, but this would require more complex code.
     myjson = {"data": "x" * json_kbs * 1024}
@@ -98,13 +94,18 @@ def _do_insert_copy_from(table, nparams, json_kbs):
     with DBManager() as db:
         cur = db.conn.cursor()
         bfr = StringIO()
-        writer = csv.writer(bfr, delimiter="\t", lineterminator="\n", escapechar="\\", quoting=csv.QUOTE_NONE)
+        writer = csv.writer(
+            bfr,
+            delimiter="\t",
+            lineterminator="\n",
+            escapechar="\\",
+            quoting=csv.QUOTE_NONE,
+        )
         writer.writerows(params)
         bfr.seek(0)
         cur.copy_from(bfr, table, columns=("fake_id", "json_data"), sep="\t")
         db.conn.commit()
         cur.close()
-
 
 
 @click.group()
@@ -150,7 +151,7 @@ def drop_table(table):
 @click.option("--nrows", default=10**6, help="number of rows to insert")
 @click.option("--batch-size", default=1000, help="batch insert size")
 @click.option("--json-kbs", default=10, help="size of json file in kilobytes")
-@click.option("--method", default='batch', help="batch or copy")
+@click.option("--method", default="batch", help="batch or copy")
 def test_multiprocess(table, nworkers, nrows, batch_size, json_kbs, method):
     nworkers = nworkers or os.cpu_count()
 
@@ -158,11 +159,10 @@ def test_multiprocess(table, nworkers, nrows, batch_size, json_kbs, method):
     with concurrent.futures.ProcessPoolExecutor(max_workers=nworkers) as executor:
         # a little lazy here on the math. We could be light on the last batch.
         ntasks = nrows // batch_size
-        fct = {'batch': _do_insert_batch, 'copy': _do_insert_copy_from}[method]
+        fct = {"batch": _do_insert_batch, "copy": _do_insert_copy_from}[method]
 
         futures = [
-            executor.submit(fct, table, batch_size, json_kbs)
-            for i in range(ntasks)
+            executor.submit(fct, table, batch_size, json_kbs) for i in range(ntasks)
         ]
 
     for future in concurrent.futures.as_completed(futures):
@@ -172,28 +172,65 @@ def test_multiprocess(table, nworkers, nrows, batch_size, json_kbs, method):
     print(f"inserts {t1-t0} seconds")
 
 
-
 @cli.command()
 @click.option("--table", default="test_json_inserts", help="target table to insert")
 @click.option("--nworkers", default=4, help="number of processes to use")
 @click.option("--nrows", default=10**6, help="number of rows to insert")
 @click.option("--batch-size", default=1000, help="batch insert size")
 @click.option("--json-kbs", default=10, help="size of json file in kilobytes")
-@click.option("--method", default='batch', help="batch or copy")
+@click.option("--method", default="batch", help="batch or copy")
 def test_multithread(table, nworkers, nrows, batch_size, json_kbs, method):
 
     t0 = timeit.default_timer()
     with concurrent.futures.ThreadPoolExecutor(max_workers=nworkers) as executor:
         # a little lazy here on the math. We could be light on the last batch.
         ntasks = nrows // batch_size
-        fct = {'batch': _do_insert_batch, 'copy': _do_insert_copy_from}[method]
+        fct = {"batch": _do_insert_batch, "copy": _do_insert_copy_from}[method]
         futures = [
-            executor.submit(fct, table, batch_size, json_kbs)
-            for i in range(ntasks)
+            executor.submit(fct, table, batch_size, json_kbs) for i in range(ntasks)
         ]
 
     for future in concurrent.futures.as_completed(futures):
         future.result()
+
+    t1 = timeit.default_timer()
+    print(f"inserts {t1-t0} seconds")
+
+
+@cli.command()
+@click.option("--table", default="test_json_inserts", help="target table to insert")
+@click.option("--nrows", default=10**6, help="number of rows to insert")
+@click.option("--batch-size", default=1000, help="batch insert size")
+@click.option("--json-kbs", default=10, help="size of json file in kilobytes")
+@click.option("--method", default="batch", help="batch or copy")
+def test_temptable(table, nrows, batch_size, json_kbs, method):
+    SQL1 = """
+            DROP TABLE IF EXISTS {table};
+            CREATE TEMP TABLE IF NOT EXISTS temp_{table} (
+                fake_id text NOT NULL,
+                json_data jsonb
+            );
+        """
+    SQL2 = """CREATE TABLE {table} AS select * from temp_{table}"""
+
+    t0 = timeit.default_timer()
+    with DBManager() as db:
+        cur = db.conn.cursor()
+        cur.execute(SQL1.format(table=table))
+        print("created temp table")
+
+        # Insert into temporary table
+        myjson = {"data": "x" * json_kbs * 1024}
+        ntasks = nrows // batch_size
+        for i in range(ntasks):
+            params = [(f"fake_id_{i}", json.dumps(myjson)) for i in range(batch_size)]
+            execute_batch(cur, INSERT_SQL.format(table="temp_" + table), params)
+
+        # Copy into perm table
+        cur.execute(SQL2.format(table=table))
+        db.conn.commit()
+        cur.close()
+        print(f"successfully created table {table}")
 
     t1 = timeit.default_timer()
     print(f"inserts {t1-t0} seconds")
@@ -205,8 +242,5 @@ def test_credentials():
     print(secret)
 
 
-
-
-
 if __name__ == "__main__":
-    cli() 
+    cli()

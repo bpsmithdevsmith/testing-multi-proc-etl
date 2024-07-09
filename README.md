@@ -44,39 +44,12 @@ perf_test [command] [options]
   mycliapp command2 --option2 value2
   ```
 
-## Configuration
+## Profiling 
 
-MyCLIApp can be configured using environment variables or a configuration file.
-
-### Environment Variables
-
-- `MYCLIAPP_CONFIG`: Path to the configuration file
-
-### Configuration File
-
-By default, MyCLIApp looks for a configuration file at `~/.mycliapp/config.yaml`. You can specify a different configuration file using the `MYCLIAPP_CONFIG` environment variable.
-
-```yaml
-# config.yaml
-setting1: value1
-setting2: value2
 ```
+> python -m cProfile -o mt.prof  perf_test.py test-multithread --table processes --nrows 100000 --json-kbs 10 --batch-size 1000  
+# To view 
+> snakeviz mt.prof
 
-## Contributing
 
-We welcome contributions! Please see our [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to contribute.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Contact
-
-For any questions or feedback, please open an issue on GitHub or contact [your email].
-
----
-
-*This README.md template is generated for MyCLIApp, a CLI application built with Python and Click.*
 ```
-
-Feel free to customize the template according to your specific application's details and requirements.
